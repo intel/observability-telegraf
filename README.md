@@ -19,24 +19,36 @@ Pre-configuration is needed for a container to read metrics from specific plugin
 
 ### [Intel PowerStat plugin](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_powerstat)
 
-Plugin is based on Linux Kernel modules that expose specific metrics over `sysfs` or `devfs` interfaces.
-The following dependencies are expected by plugin:
+Plugin is based on Linux Kernel modules that expose specific metrics over
+`sysfs` or `devfs` interfaces. The following dependencies are expected by
+plugin:
 
-- _intel-rapl_ module which exposes Intel Runtime Power Limiting metrics over `sysfs` (`/sys/devices/virtual/powercap/intel-rapl`),
-- _msr_ kernel module that provides access to processor model specific registers over `devfs` (`/dev/cpu/cpu%d/msr`),
-- _cpufreq_ kernel module - which exposes per-CPU Frequency over `sysfs` (`/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq`).
+- _intel-rapl_ module which exposes Intel Runtime Power Limiting metrics over
+  `sysfs` (`/sys/devices/virtual/powercap/intel-rapl`),
+- _msr_ kernel module that provides access to processor model specific
+  registers over `devfs` (`/dev/cpu/cpu%d/msr`),
+- _cpufreq_ kernel module - which exposes per-CPU Frequency over `sysfs`
+  (`/sys/devices/system/cpu/cpu%d/cpufreq/scaling_cur_freq`).
+- _intel-uncore-frequency_ module exposes Intel uncore frequency metrics
+  over `sysfs` (`/sys/devices/system/cpu/intel_uncore_frequency`),
 
-Minimum kernel version required is 3.13 to satisfy all requirements.
+Minimum kernel version required is 3.13 to satisfy most of requirements,
+for `uncore_frequency` metrics `intel-uncore-frequency` module is required
+(available since kernel 5.6).
 
-Please make sure that kernel modules are loaded and running (cpufreq is integrated in kernel). Modules might have to be manually enabled by using `modprobe`.
-Depending on the kernel version, run commands:
+Please make sure that kernel modules are loaded and running (cpufreq is
+integrated in kernel). Modules might have to be manually enabled by using
+`modprobe`. Depending on the kernel version, run commands:
 
 ```sh
 # kernel 5.x.x:
 sudo modprobe rapl
-subo modprobe msr
+sudo modprobe msr
 sudo modprobe intel_rapl_common
 sudo modprobe intel_rapl_msr
+
+# also for kernel >= 5.6.0
+sudo modprobe intel-uncore-frequency
 
 # kernel 4.x.x:
 sudo modprobe msr
@@ -53,12 +65,16 @@ The Redfish plugin needs hardware servers for which
 - The DPDK plugin needs external application built with
 [Data Plane Development Kit](https://www.dpdk.org/).
 - `./telegraf-intel-docker.sh` has default location of DPDK socket -`/var/run/dpdk/rte`, if DPDK socket is located
-somewhere else, user must specify this in running stage providing `--dpdk_socket_path` flag.
+somewhere else, user must specify this in running stage providing `--dpdk_socket_path` flag. Providing path to a
+directory that contains the hosts' own Docker socket file is not recommended.
 
 ### [Intel PMU](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_pmu)
 
 The plugin requires JSON files with event definitions to work properly. Those can be specified in `./telegraf-intel-docker.sh`
-by providing `--pmu_events` parameter. More information about event definitions and where to get them should be found in plugin's
+by providing `--pmu_events` parameter. Providing path to a directory that contains the hosts' own Docker socket file
+is not recommended.
+
+More information about event definitions and where to get them should be found in plugin's
 [README](https://github.com/influxdata/telegraf/blob/master/plugins/inputs/intel_pmu/README.md).
 
 ### [RAS](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ras)
@@ -201,14 +217,15 @@ The following plugins should work on a majority of the host's configurations.
 4. [Disk IO](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/diskio)
 5. [DNS Query](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/dns_query)
 6. [ETH Tool](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ethtool)
-7. [IP Tables](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/iptables)
-8. [Kernel VMStat](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/kernel_vmstat)
-9. [Mem](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/mem)
-10. [Net](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/net)
-11. [Ping](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ping)
-12. [Smart](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/smart)
-13. [System](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/system)
-14. [Temp](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/temp)
+7. [Hugepages](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/hugepages)
+8. [IP Tables](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/iptables)
+9. [Kernel VMStat](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/kernel_vmstat)
+10. [Mem](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/mem)
+11. [Net](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/net)
+12. [Ping](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ping)
+13. [Smart](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/smart)
+14. [System](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/system)
+15. [Temp](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/temp)
 
 #### Disabled by default
 
@@ -230,3 +247,13 @@ List of supported Telegraf output plugins enabled by default.
 
 1. [File](https://github.com/influxdata/telegraf/tree/master/plugins/outputs/file)
 2. [Prometheus client](https://github.com/influxdata/telegraf/tree/master/plugins/outputs/prometheus_client)
+
+### Changelog
+
+#### 1.2.0
+
+- Update telegraf version: 1.21.3 -> 1.24.3
+- Update version of pqos (intel_cmt_cat): 4.2.0 -> 4.4.1
+- Add Hugepages plugin (enabled by default)
+- Add new features: uncore_freq and max_turbo_freq for Powerstat plugin
+- Update the final alpine image: 3.15 -> 3.16
