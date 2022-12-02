@@ -8,12 +8,12 @@ DOCKER_CONTAINER_NAME=$3
 DOCKER_DPDK_SOCKET_PATH="/var/run/dpdk/rte"
 DOCKER_PMU_EVENTS_PATH="/var/cache/pmu"
 
-readonly TELEGRAF_VERSION='1.21.3-alpine'
+readonly TELEGRAF_VERSION='1.24.3-alpine'
 
 readonly DOCKER_IMAGE_NAME=$2
-readonly DOCKER_IMAGE_TAG='1.1'
-readonly DOCKER_TELEGRAF_BUILD_IMAGE='telegraf:1.21.3-alpine'
-readonly DOCKER_TELEGRAF_FINAL_BASE_IMAGE='alpine:3.15.0'
+readonly DOCKER_IMAGE_TAG='1.2.0'
+readonly DOCKER_TELEGRAF_BUILD_IMAGE="telegraf:${TELEGRAF_VERSION}"
+readonly DOCKER_TELEGRAF_FINAL_BASE_IMAGE='alpine:3.16'
 
 readonly CONTAINER_MEMORY_LIMIT=200m
 readonly CONTAINER_CPU_SHARES=512
@@ -32,8 +32,9 @@ fi
 # Build docker image.
 function build_docker() {
   echo -e "${GREEN}Building Telegraf Docker image...${NO_COLOR}"
+  echo -e "Using telegraf version: ${TELEGRAF_VERSION}. Final base image: ${DOCKER_TELEGRAF_FINAL_BASE_IMAGE}"
   echo "If this is your first time building image this might take a minute..."
-  docker build --build-arg TELEGRAF_TAG=$TELEGRAF_VERSION -f images/telegraf/Dockerfile . -t "$DOCKER_IMAGE_NAME":$DOCKER_IMAGE_TAG
+  docker build --build-arg TELEGRAF_TAG=$TELEGRAF_VERSION --build-arg FINAL_BASE_IMAGE=$DOCKER_TELEGRAF_FINAL_BASE_IMAGE -f images/telegraf/Dockerfile . -t "$DOCKER_IMAGE_NAME":$DOCKER_IMAGE_TAG
 }
 
 # Build and run docker container.
