@@ -6,14 +6,20 @@ IFS=$'\n\t'
 
 DOCKER_CONTAINER_NAME=$3
 DOCKER_DPDK_SOCKET_PATH="/var/run/dpdk/rte"
+DOCKER_LIBVIRT_SOCKET_PATH="/var/run/libvirt/libvirt-sock"
+DOCKER_LIBVIRT_TLS_CERT="/etc/pki/CA"
+DOCKER_P4RUNTIME_TLS_CERT="/etc/pki/CA"
+DOCKER_SSH_DIR="$HOME/.ssh"
 DOCKER_PMU_EVENTS_PATH="/var/cache/pmu"
+DOCKER_INTEL_BASEBAND_LOG=""
+DOCKER_INTEL_BASEBAND_SOCKET=""
 
-readonly TELEGRAF_VERSION='1.24.3-alpine'
+readonly TELEGRAF_VERSION='1.27.4-alpine'
 
 readonly DOCKER_IMAGE_NAME=$2
-readonly DOCKER_IMAGE_TAG='1.2.0'
+readonly DOCKER_IMAGE_TAG='1.3.0'
 readonly DOCKER_TELEGRAF_BUILD_IMAGE="telegraf:${TELEGRAF_VERSION}"
-readonly DOCKER_TELEGRAF_FINAL_BASE_IMAGE='alpine:3.16'
+readonly DOCKER_TELEGRAF_FINAL_BASE_IMAGE='alpine:3.18'
 
 readonly CONTAINER_MEMORY_LIMIT=200m
 readonly CONTAINER_CPU_SHARES=512
@@ -45,11 +51,24 @@ function run_docker() {
   -v "/proc:/hostfs/proc:ro" \
   -v "/run/udev:/run/udev:ro" \
   -v "/var/run/utmp:/var/run/utmp:ro" \
+  -v "/sys/devices:/sys/devices:ro" \
+  -v "/dev/cpu:/dev/cpu:ro" \
+  -v "/sys/fs/cgroup:/sys/fs/cgroup:ro" \
+  -v "${DOCKER_LIBVIRT_SOCKET_PATH}:${DOCKER_LIBVIRT_SOCKET_PATH}" \
+  -v "${DOCKER_SSH_DIR}:${DOCKER_SSH_DIR}" \
+  -v "${DOCKER_LIBVIRT_TLS_CERT}:${DOCKER_LIBVIRT_TLS_CERT}" \
+  -v "${DOCKER_P4RUNTIME_TLS_CERT}:${DOCKER_P4RUNTIME_TLS_CERT}" \
   -v "${DOCKER_DPDK_SOCKET_PATH}:${DOCKER_DPDK_SOCKET_PATH}:ro" \
   -v "${DOCKER_PMU_EVENTS_PATH}:${DOCKER_PMU_EVENTS_PATH}:ro")
 
   if [ "$USE_HOST_RASDAEMON" == "true" ]; then
-    DOCKER_MOUNT_VARIABLES_ARRAY=("${DOCKER_MOUNT_VARIABLES_ARRAY[@]}" -v "/var/lib/rasdaemon:/var/lib/rasdaemon:ro")
+    DOCKER_MOUNT_VARIABLES_ARRAY=("${DOCKER_MOUNT_VARIABLES_ARRAY[@]}" -v "/var/lib/rasdaemon/ras-mc_event.db:/var/lib/rasdaemon/ras-mc_event.db:ro")
+  fi
+
+  if [ "${DOCKER_INTEL_BASEBAND_LOG}" != "" ] && [ "${DOCKER_INTEL_BASEBAND_SOCKET}" != "" ]; then
+    DOCKER_MOUNT_VARIABLES_ARRAY=("${DOCKER_MOUNT_VARIABLES_ARRAY[@]}" \
+    --mount "type=bind,source=${DOCKER_INTEL_BASEBAND_LOG},target=${DOCKER_INTEL_BASEBAND_LOG}" \
+    --mount "type=bind,source=${DOCKER_INTEL_BASEBAND_SOCKET},target=${DOCKER_INTEL_BASEBAND_SOCKET}")
   fi
 
   docker run -d --hostname telegraf-intel \
@@ -64,8 +83,7 @@ function run_docker() {
             --cpu-shares="$CONTAINER_CPU_SHARES" \
             --restart on-failure:5 \
             --health-cmd='stat /etc/passwd || exit 1' \
-            --security-opt=no-new-privileges \
-            --pids-limit 100 \
+            --pids-limit 1024 \
             -i -t "$DOCKER_IMAGE_NAME":$DOCKER_IMAGE_TAG
 }
 
@@ -116,41 +134,116 @@ function check_container_name() {
   fi
 }
 
+
 function check_flag_presence() {
-  flags_array=( "$@" )
-  for (( i=3; i<$#; i++)) do
-    case "${flags_array[$i]}" in
-    "--dpdk_socket_path")
-      i=$((i+1))
-      if [ -f "${flags_array[$i]}" ]; then
-        # Set docker path from argument provided by user
-        DOCKER_DPDK_SOCKET_PATH="${flags_array[$i]}"
-        continue
-      else
-        echo -e "${RED}Can not find provided file - ${flags_array[$i]} ${NO_COLOR}"
+  # Example of command line arguments:
+  # <1: docker command, for example: build-run> <2: image-name> <3: container-name>
+  # <4: dpdk_socket_path / use-host-rasdaemon / pmu_events / libvirt_socket_path / p4runtime_socket_path > <5:value>
+
+  # Shift the first three command line arguments since they are not needed.
+  shift 3
+
+  # Loop over the remaining command line arguments.
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      --dpdk_socket_path)
+        # If the argument is --dpdk_socket_path, shift again to get the value of the flag,
+        # check if the provided directory exists, set DOCKER_DPDK_SOCKET_PATH to the path of the dir.
+        shift
+        if [ ! -d "$1" ]; then
+          echo -e "${RED}Cannot find provided directory - $1${NO_COLOR}"
+          exit 1
+        fi
+        DOCKER_DPDK_SOCKET_PATH=$1
+        ;;
+      --use-host-rasdaemon)
+        # If the argument is --use-host-rasdaemon, set USE_HOST_RASDAEMON to true
+        # Print a message indicating that the function is mounting a folder from the host OS.
+        echo -e "${YELLOW}Mounting rasdaemon folder from host OS${NO_COLOR}"
+        USE_HOST_RASDAEMON=true
+        ;;
+      --pmu_events)
+        # If the argument is --pmu_events, shift again to get the value of the flag
+        # Check if the provided directory exists, set DOCKER_PMU_EVENTS_PATH to the path of the directory.
+        shift
+        if [ ! -d "$1" ]; then
+          echo -e "${RED}Cannot find provided directory - $1${NO_COLOR}"
+          exit 1
+        fi
+        DOCKER_PMU_EVENTS_PATH=$1
+        ;;
+      --libvirt_socket_path)
+        # If the argument is --libvirt_socket_path, shift again to get the value of the flag
+        # Check if the provided file exists and is a socket file, set DOCKER_LIBVIRT_SOCKET_PATH to the path of the file.
+        echo "Changing default libvirt socket path - $DOCKER_LIBVIRT_SOCKET_PATH to $1"
+        shift
+        if [ ! -S "$1" ]; then
+          echo -e "${RED}Cannot find provided file - $1${NO_COLOR}"
+          exit 1
+        fi
+        DOCKER_LIBVIRT_SOCKET_PATH=$1
+        ;;
+      --ssh_dir)
+        # If the argument is --ssh_dir, shift again to get the value of the flag
+        # Check if the provided file exists and is a directory, set DOCKER_SSH_DIR to the path of the dir.
+        shift
+        echo "Changing default ssh dir - $DOCKER_SSH_DIR to $1"
+        if [ ! -d "$1" ]; then
+          echo -e "${RED}Cannot find provided directory - $1${NO_COLOR}"
+          exit 1
+        fi
+        DOCKER_SSH_DIR=$1
+        ;;
+      --libvirt_tls_cert)
+        # If the argument is --libvirt_tls_cert, shift again to get the value of the flag
+        # Check if the provided file exists and is a directory, set DOCKER_LIBVIRT_TLS_CERT to the path of the dir.
+        shift
+        echo "Changing default libvirt tls dir - $DOCKER_LIBVIRT_TLS_CERT to $1"
+        if [ ! -d "$1" ]; then
+          echo -e "${RED}Cannot find provided directory - $1${NO_COLOR}"
+          exit 1
+        fi
+        DOCKER_LIBVIRT_TLS_CERT=$1
+        ;;
+      --p4runtime_tls_cert)
+        # If the argument is --p4runtime_tls_cert, shift again to get the value of the flag
+        # Check if the provided file exists and is a directory, set DOCKER_P4RUNTIME_TLS_CERT to the path of the dir.
+        shift
+        echo "Changing default p4runtime tls dir - $DOCKER_P4RUNTIME_TLS_CERT to $1"
+        if [ ! -d "$1" ]; then
+          echo -e "${RED}Cannot find provided directory - $1${NO_COLOR}"
+          exit 1
+        fi
+        DOCKER_P4RUNTIME_TLS_CERT=$1
+        ;;
+      --intel_baseband_socket_path)
+        # If the argument is --intel_baseband_socket_path, shift again to get the value of the flag
+        # Check if the provided file exists and is a socket file, set DOCKER_INTEL_BASEBAND_SOCKET to the path of the file.
+        shift
+        if [ ! -S "$1" ]; then
+          echo -e "${RED}Cannot find provided file - $1${NO_COLOR}"
+          exit 1
+        fi
+        DOCKER_INTEL_BASEBAND_SOCKET=$1
+        ;;
+     --intel_baseband_log_path)
+       # If the argument is --intel_baseband_log_path, shift again to get the value of the flag
+       # Check if the provided file exists and is a regular file, set DOCKER_INTEL_BASEBAND_LOG to the path of the file.
+       shift
+       if [ ! -f "$1" ]; then
+         echo -e "${RED}Cannot find provided file - $1${NO_COLOR}"
+         exit 1
+       fi
+       DOCKER_INTEL_BASEBAND_LOG=$1
+       ;;
+      *)
+        # If the argument is none of the above, print an error message and exit with a status of 1.
+        echo -e "${RED}Unknown command - '$1'${NO_COLOR}"
         exit 1
-      fi
-      ;;
-    "--use-host-rasdaemon")
-      echo -e "${YELLOW}Mounting rasdaemon folder from host OS${NO_COLOR}"
-      USE_HOST_RASDAEMON="true"
-      continue
-      ;;
-    "--pmu_events")
-      i=$((i+1))
-      if [ -d "${flags_array[$i]}" ]; then
-        DOCKER_PMU_EVENTS_PATH="${flags_array[$i]}"
-        continue
-      else
-        echo -e "${RED}Can not find provided directory - ${flags_array[$i]} ${NO_COLOR}"
-        exit 1
-      fi
-    ;;
-    *)
-      echo -e "${RED}Unknown command - '${flags_array[$i]}'${NO_COLOR}"
-      exit 1
-      ;;
+        ;;
     esac
+    # Shift the arguments again to move to the next one.
+    shift
   done
 }
 
@@ -159,7 +252,7 @@ telegraf-intel-docker() {
   enter() {
     if check_arg_number "$@"; then
       echo -e "${YELLOW}Entering /bin/bash session in the telegraf container...${NO_COLOR}"
-      docker exec -i -t "$DOCKER_CONTAINER_NAME" /bin/bash
+      docker exec -u telegraf -i -t "$DOCKER_CONTAINER_NAME" /bin/bash
     fi
   }
 
@@ -257,12 +350,20 @@ telegraf dockerized commands:
         --pmu_events <events definition path>                -> Path to filesystem directory containing JSON files with PMU events definitions. Default: "/var/cache/pmu"
         --dpdk_socket_path <dpdk socket path>                -> Path to DPDK socket (if needed). Default: "/var/run/dpdk/rte"
         --use-host-rasdaemon                                 -> Mount rasdaemon folder from host OS.
+        --ssh_dir                                            -> Path to .ssh dir. Default: "\$HOME/.ssh"
+        --libvirt_socket_path                                -> Path to libvirt socket. Default: "/var/run/libvirt/libvirt-sock"
+        --libvirt_tls_cert                                   -> Path to dir with libvirt tls certs. Default: "/etc/pki/CA"
+        --p4runtime_tls_cert                                 -> Path to dir with p4runtime tls certs. Default: "/etc/pki/CA"
 
   run <image-name> <container-name>                          -> Run Telegraf Docker image.
      options:
         --pmu_events <events definition path>                -> Path to filesystem directory containing JSON files with PMU events definitions. Default: "/var/cache/pmu"
         --dpdk_socket_path <dpdk socket path>                -> Path to DPDK socket (if needed). Default: "/var/run/dpdk/rte"
         --use-host-rasdaemon                                 -> Mount rasdaemon folder from host OS.
+        --ssh_dir                                            -> Path to .ssh dir. Default: "\$HOME/.ssh"
+        --libvirt_socket_path                                -> Path to libvirt socket. Default: "/var/run/libvirt/libvirt-sock"
+        --libvirt_tls_cert                                   -> Path to dir with libvirt tls certs. Default: "/etc/pki/CA"
+        --p4runtime_tls_cert                                 -> Path to dir with p4runtime tls certs. Default: "/etc/pki/CA"
 
   restart <image-name> <container-name>                      -> Restart Telegraf image and container.
 
