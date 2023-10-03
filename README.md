@@ -17,6 +17,12 @@ with certain plugins.
 
 Pre-configuration is needed for a container to read metrics from specific plugins:
 
+### [Iptables Input Plugin](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/iptables)
+
+By default, plugin uses command `sudo iptables -nvL INPUT -x`. `iptables` has become a legacy tool and has been
+replaced by `iptables-nft`. If there is a need to use `iptables-nft` line `#binary = "iptables-ntf"` should be
+uncommented in the configuration.
+
 ### [Intel PowerStat plugin](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_powerstat)
 
 Plugin is based on Linux Kernel modules that expose specific metrics over
@@ -59,6 +65,15 @@ sudo modprobe intel_rapl
 
 The Redfish plugin needs hardware servers for which
 [**DMTF's Redfish**](https://redfish.dmtf.org/) is enabled.
+
+For quick check proper work of redfish plugin, you can do a mockup:
+Mockup must be preformed on HOST!
+
+1. Get a source code: `git clone https://opendev.org/x/python-redfish.git`
+2. Go into dmtf/mockup_0.99.0a folder.
+3. Run `./buildImage.sh` and `./run-redfish-simulator.sh`
+4. Check that a container is running and listening on port 8000, by command: docker ps
+5. Now run observability-telegraf with redfish plugin.
   
 ### [DPDK plugin](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/dpdk)
 
@@ -67,6 +82,9 @@ The Redfish plugin needs hardware servers for which
 - `./telegraf-intel-docker.sh` has default location of DPDK socket -`/var/run/dpdk/rte`, if DPDK socket is located
 somewhere else, user must specify this in running stage providing `--dpdk_socket_path` flag. Providing path to a
 directory that contains the hosts' own Docker socket file is not recommended.
+
+Make sure the container has read and write access to the socket.
+It can be done e.g. by `chmod a+rw /var/run/dpdk/rte/dpdk_telemetry.v2"`
 
 ### [Intel PMU](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_pmu)
 
@@ -77,11 +95,57 @@ is not recommended.
 More information about event definitions and where to get them should be found in plugin's
 [README](https://github.com/influxdata/telegraf/blob/master/plugins/inputs/intel_pmu/README.md).
 
+### [Libvirt](https://github.com/influxdata/telegraf/blob/master/plugins/inputs/libvirt)
+
+The script `telegraf-intel-docker.sh` has a default location for the libvirt socket at `/var/run/libvirt/libvirt-sock`. If the libvirt socket is located elsewhere, users must provide the `--libvirt_socket_path` flag at runtime to specify the custom location. It is not recommended to use a directory that contains the host's own libvirt socket file.
+
+Make sure the container has write access to the socket.
+It can be done e.g. by `chmod a+w /var/run/libvirt/libvirt-sock"`
+
+Similarly, the script assumes that the default location of libvirt TLS certificates is at `/etc/pki/CA`. However, users can override this location by providing the `--libvirt_tls_cert` parameter at runtime with the desired directory path.
+
+Additionally, the script assumes that the `.ssh` directory is located in the user's home directory at `$HOME/.ssh`. If this is not the case, users can specify an alternate location at runtime by using the `--ssh_dir` parameter.
+
+More information about event definitions and where to get them should be found in plugin's
+[README](https://github.com/influxdata/telegraf/blob/master/plugins/inputs/libvirt).
+
+### [P4Runtime](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/p4runtime)
+
+The script `telegraf-intel-docker.sh` assumes that the default location of P4Runtime TLS certificates is at `/etc/pki/CA`. However, users can override this location by providing the `--p4runtime_tls_cert` parameter at runtime with the desired directory path.
+
 ### [RAS](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ras)
 
 If rasdaemon exists on the host OS, please make sure rasdaemon version on host matches exactly v0.6.7 (as the container does).
 Then mount the rasdaemon library directory to the container, so that both versions are kept in sync:
 `./telegraf-intel-docker.sh --use-host-rasdaemon`. An alternative is to remove rasdaemon from the host OS.
+
+### [Intel DLB](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_dlb)
+
+- The Intel DLB plugin needs external application built with
+[Data Plane Development Kit](https://www.dpdk.org/) and installed
+[Intel® Dynamic Load Balancer Driver](https://www.intel.com/content/www/us/en/download/686372/intel-dynamic-load-balancer.html).
+
+- `./telegraf-intel-docker.sh` has default location of DPDK socket -`/var/run/dpdk/rte`, if DPDK socket is located
+somewhere else, user must specify this in running stage providing `--dpdk_socket_path` flag. Providing path to a
+directory that contains the hosts' own Docker socket file is not recommended.
+
+Make sure the container has read and write access to the socket.
+It can be done e.g. by `chmod a+rw /var/run/dpdk/rte/dpdk_telemetry.v2"`
+
+### [Intel Baseband](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_baseband)
+
+Intel Baseband Accelerator Input Plugin requires a properly configured and running [pf-bb-config](https://github.com/intel/pf-bb-config).
+When running in daemon mode (VFIO mode) the pf_bb_config application is running as a service and exposes a socket
+for CLI interaction. The path to the socket user must specify in the option `--intel_baseband_socket_path`
+(eg `--intel_baseband_socket_path /tmp/pf_bb_config.0000:b1:00.0.sock`).
+The response from socket is stored from the `.log` file (eg `/var/log/pf_bb_cfg_0000:b1:00.0.log`).
+If pf-bb-config creates files ending in `.log` and `_resposne.log`, select the file `_resposne.log`.
+The path to the file user must specify in the `--intel_baseband_log_path` option (for the example above it will be
+`--intel_baseband_log_path /var/log/pf_bb_cfg_0000:b1:00.0.log` or, if there is a file `_resposne.log`,
+`intel_baseband_log_path /var/log/pf_bb_cfg_0000:b1:00.0_response.log`).
+
+For correct operation of operator telegraph user must specify both options (`--intel_baseband_socket_path` and `--intel_baseband_log_path`).
+Remember to set the same values in the telegraf.conf file.
 
 ## Installation
 
@@ -123,6 +187,10 @@ Docker container in background. Provide valid image and container names in place
 - **Run with DPDK socket path**:
 
   `./telegraf-intel-docker.sh run <image-name> <container-name> --dpdk_socket_path <socket-path>`
+
+- **Run with non-default libvirt socket path, customized location of .ssh directory and tls certs**:
+
+  `./telegraf-intel-docker.sh run <image-name> <container-name> --libvirt_socket_path <socket_path> --ssh_dir <ssh_dir> --libvirt_tls_cert <certs_dir>`
 
 - **Run with mounted rasdaemon folder**:
 
@@ -195,9 +263,14 @@ To change Telegraf configuration file:
   
   `./telegraf-intel-docker.sh restart <image-name> <container-name>` - This will restart the container, and run it with the new
 configuration.
+
 - To build and run the container with DPDK socket path:
 
   `./telegraf-intel-docker.sh build-run <image-name> <container-name> --dpdk_socket_path /var/run/dpdk/rte`
+
+- To build and run the container with necessary files for Intel Baseband Accelerator Input Plugin:
+
+  `./telegraf-intel-docker.sh build-run <image-name> <container-name> --intel_baseband_socket_path /tmp/pf_bb_config.0000:b1:00.0.sock --intel_baseband_log_path /var/log/pf_bb_cfg_0000:b1:00.0.log`
 
 ---
 
@@ -233,13 +306,17 @@ Some plugins need special attention regarding host's configuration. Observabilit
 can be enabled by uncommenting associated config fields in `telegraf/telegraf.conf` file. Please ensure configuration requirements are properly fulfilled
 for plugins listed below.
 
-1. [Intel PowerStat](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_powerstat)
-2. [Intel RDT](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_rdt)
-3. [Intel PMU](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_pmu)
-4. [DPDK](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/dpdk)
-5. [IPMI Sensor](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ipmi_sensor)
-6. [RAS](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ras)
-7. [Redfish](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/redfish)
+1. [Intel Baseband](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_baseband)
+2. [Intel DLB](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_dlb)
+3. [Intel PowerStat](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_powerstat)
+4. [Intel RDT](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_rdt)
+5. [Intel PMU](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_pmu)
+6. [DPDK](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/dpdk)
+7. [IPMI Sensor](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ipmi_sensor)
+8. [Libvirt](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/libvirt)
+9. [P4Runtime](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/p4runtime)
+10. [RAS](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ras)
+11. [Redfish](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/redfish)
 
 ### Output plugins
 
@@ -249,6 +326,15 @@ List of supported Telegraf output plugins enabled by default.
 2. [Prometheus client](https://github.com/influxdata/telegraf/tree/master/plugins/outputs/prometheus_client)
 
 ### Changelog
+
+#### 1.3.0
+
+- Update telegraf version: 1.24.3 -> 1.27.4
+- Add P4Runtime plugin (disabled by default)
+- Add Intel DLB plugin (disabled by default)
+- Add Intel Baseband plugin (disabled by default)
+- Add new features: cpu_base_frequency for Powerstat plugin
+- Update the final alpine image: 3.16 -> 3.18
 
 #### 1.2.0
 
