@@ -38,7 +38,7 @@ plugin:
 - _intel-uncore-frequency_ module exposes Intel uncore frequency metrics
   over `sysfs` (`/sys/devices/system/cpu/intel_uncore_frequency`),
 
-Minimum kernel version required is 3.13 to satisfy most of requirements,
+Minimum kernel version required is 3.13 to satisfy most of the requirements,
 for `uncore_frequency` metrics `intel-uncore-frequency` module is required
 (available since kernel 5.6).
 
