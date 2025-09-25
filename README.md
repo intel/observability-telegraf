@@ -70,9 +70,9 @@ For quick check proper work of redfish plugin, you can do a mockup:
 Mockup must be preformed on HOST!
 
 1. Get a source code: `git clone https://opendev.org/x/python-redfish.git`
-2. Go into dmtf/mockup_0.99.0a folder.
+2. Go into `dmtf/mockup_0.99.0a` folder.
 3. Run `./buildImage.sh` and `./run-redfish-simulator.sh`
-4. Check that a container is running and listening on port 8000, by command: docker ps
+4. Check that a container is running and listening on port 8000, by command: `docker ps`
 5. Now run observability-telegraf with redfish plugin.
   
 ### [DPDK plugin](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/dpdk)
@@ -115,9 +115,9 @@ The script `telegraf-intel-docker.sh` assumes that the default location of P4Run
 
 ### [RAS](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/ras)
 
-If rasdaemon exists on the host OS, please make sure rasdaemon version on host matches exactly v0.6.7 (as the container does).
-Then mount the rasdaemon library directory to the container, so that both versions are kept in sync:
-`./telegraf-intel-docker.sh --use-host-rasdaemon`. An alternative is to remove rasdaemon from the host OS.
+If `rasdaemon` exists on the host OS, please make sure `rasdaemon` version on host matches exactly `v0.6.7` (as the container does).
+Then mount the `rasdaemon` library directory to the container, so that both versions are kept in sync:
+`./telegraf-intel-docker.sh --use-host-rasdaemon`. An alternative is to remove `rasdaemon` from the host OS.
 
 ### [Intel DLB](https://github.com/influxdata/telegraf/tree/master/plugins/inputs/intel_dlb)
 
@@ -145,14 +145,14 @@ The path to the file user must specify in the `--intel_baseband_log_path` option
 `intel_baseband_log_path /var/log/pf_bb_cfg_0000:b1:00.0_response.log`).
 
 For correct operation of operator telegraph user must specify both options (`--intel_baseband_socket_path` and `--intel_baseband_log_path`).
-Remember to set the same values in the telegraf.conf file.
+Remember to set the same values in the `telegraf.conf` file.
 
 ## Installation
 
 ### From source
 
 1. Install Docker 20.10.6. or newer. [Docker installation guide](https://docs.docker.com/engine/install/)
-2. Clone Telegraf Intel Docker repository. Cloning this repo into /tmp or any privileged directory is not recommended.
+2. Clone Telegraf Intel Docker repository. Cloning this repo into `/tmp` or any privileged directory is not recommended.
 3. Go into cloned repository `cd telegraf_intel_docker`.
 4. Run `./telegraf-intel-docker.sh build-run <image-name> <container-name>` from source file directory to build and run
 Docker container in background. Provide valid image and container names in place of `<image-name>` and
