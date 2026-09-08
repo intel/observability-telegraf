@@ -153,7 +153,7 @@ Remember to set the same values in the `telegraf.conf` file.
 
 1. Install Docker 20.10.6. or newer. [Docker installation guide](https://docs.docker.com/engine/install/)
 2. Clone Telegraf Intel Docker repository. Cloning this repo into `/tmp` or any privileged directory is not recommended.
-3. Go into cloned repository `cd telegraf_intel_docker`.
+3. Go into cloned repository `cd observability-telegraf`.
 4. Run `./telegraf-intel-docker.sh build-run <image-name> <container-name>` from source file directory to build and run
 Docker container in background. Provide valid image and container names in place of `<image-name>` and
    `<container-name>`.
